@@ -172,3 +172,7 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# Bot state files
+event_status.json
+vote_results.json
