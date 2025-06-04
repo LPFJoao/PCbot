@@ -233,6 +233,13 @@ async def on_member_join(member):
         "Once reviewed, we’ll grant you access to the rest of the guild.\n"
         "*This channel will remain open to track your progress over time.*")
 
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def startbossvote(ctx):
+    await start_vote(ctx.channel, 'boss', BOSS_EMOJIS)
+    await ctx.send("✅ Boss vote started manually.")
+
+
 
 async def main():
     await bot.start(TOKEN)
