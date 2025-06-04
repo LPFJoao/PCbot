@@ -96,10 +96,10 @@ TIME_EMOJIS = {
     '🕐': 'Sunday 21:00'
 }
 BOSS_EMOJIS = {
-    '🐉': 'Daigon',
-    '🎅': 'Pakilo Naru',
-    '🐋': 'Leviathan',
-    '🦁': 'Manticus'
+    '<:Daigon:1379778836350369922>': 'Daigon',
+    '<:Pakilo:1379778632075186276>': 'Pakilo Naru',
+    '<:Levi:1379778779412697118>': 'Leviathan',
+    '<:Manti:1379778716388818964>': 'Manticus'
 }
 
 
