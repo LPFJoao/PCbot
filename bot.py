@@ -184,6 +184,30 @@ Example: !deactivate siege
 Shows whether each of the four reminder events is currently ON or OFF."""
     await ctx.send(f"```{help_text}```")
 
+@bot.command()
+async def closevote(ctx):
+    now = datetime.now(pytz.timezone('Europe/Paris'))
+    expired = []
+
+    for mid, meta in list(vote_data['messages'].items()):
+        if now > meta['expires_at'] or ctx is not None:
+            ch = bot.get_channel(meta['channel_id'])
+            try:
+                msg = await ch.fetch_message(mid)
+            except discord.NotFound:
+                continue
+
+            summary = {}
+            for reaction in msg.reactions:
+                users = await reaction.users().flatten()
+                summary[str(reaction.emoji)] = len([u for u in users if not u.bot])
+
+            result = '\n'.join([f"{emoji}: {count} vote(s)" for emoji, count in summary.items()])
+            await ch.send(f"🗳️ **{meta['type'].capitalize()} vote results:**\n{result}")
+            expired.append(mid)
+
+    for mid in expired:
+        vote_data['messages'].pop(mid, None)
 
 @bot.event
 async def on_ready():
