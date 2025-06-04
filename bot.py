@@ -3,30 +3,39 @@ import json
 import discord
 from discord.ext import commands, tasks
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from dotenv import load_dotenv
 import pytz
 from datetime import datetime, timedelta
 import unicodedata
+import threading
+import asyncio
 
 # Load .env
-load_dotenv()
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 # Intents
 intents = discord.Intents.default()
 intents.message_content = True
 intents.reactions = True
+intents.members = True
 intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 scheduler = AsyncIOScheduler(timezone="Europe/Paris")
 
+
 # --- Reminder System ---
 def default_event_status():
-    return {"boonstone": False, "riftstone": False, "siege": False, "tax": False}
+    return {
+        "boonstone": False,
+        "riftstone": False,
+        "siege": False,
+        "tax": False
+    }
+
 
 event_status = default_event_status()
 STATUS_FILE = "event_status.json"
+
 
 def save_event_status():
     with open(STATUS_FILE, "w") as f:
@@ -41,6 +50,7 @@ def load_event_status():
     except FileNotFoundError:
         save_event_status()
 
+
 @bot.command()
 async def activate(ctx, event: str):
     key = event.lower()
@@ -49,7 +59,9 @@ async def activate(ctx, event: str):
         save_event_status()
         await ctx.send(f"✅ Activated {key} reminders.")
     else:
-        await ctx.send("❌ Unknown event. Options: boonstone, riftstone, siege, tax.")
+        await ctx.send(
+            "❌ Unknown event. Options: boonstone, riftstone, siege, tax.")
+
 
 @bot.command()
 async def deactivate(ctx, event: str):
@@ -59,19 +71,37 @@ async def deactivate(ctx, event: str):
         save_event_status()
         await ctx.send(f"❌ Deactivated {key} reminders.")
     else:
-        await ctx.send("❌ Unknown event. Options: boonstone, riftstone, siege, tax.")
+        await ctx.send(
+            "❌ Unknown event. Options: boonstone, riftstone, siege, tax.")
+
 
 @bot.command()
 async def status(ctx):
-    lines = [f"{e.capitalize()}: {'ON' if state else 'OFF'}" for e, state in event_status.items()]
+    lines = [
+        f"{e.capitalize()}: {'ON' if state else 'OFF'}"
+        for e, state in event_status.items()
+    ]
     await ctx.send("**Reminder Status**\n" + "\n".join(lines))
+
 
 # Static reminder jobs omitted for brevity...
 
 # --- Voting System ---
 vote_data = {'messages': {}, 'results': {}}
-TIME_EMOJIS = {'🕙': 'Friday 22:00', '🕕': 'Saturday 18:00', '🕘': 'Saturday 21:00', '🕔': 'Sunday 18:00', '🕐': 'Sunday 21:00'}
-BOSS_EMOJIS = {'🐉': 'Daigon', '🎅🏻': 'Pakilo Naru', '🐋': 'Leviathan', '🦁': 'Manticus'}
+TIME_EMOJIS = {
+    '🕙': 'Friday 22:00',
+    '🕕': 'Saturday 18:00',
+    '🕘': 'Saturday 21:00',
+    '🕔': 'Sunday 18:00',
+    '🕐': 'Sunday 21:00'
+}
+BOSS_EMOJIS = {
+    '🐉': 'Daigon',
+    '🎅': 'Pakilo Naru',
+    '🐋': 'Leviathan',
+    '🦁': 'Manticus'
+}
+
 
 async def start_vote(channel, t, opts):
     desc = '@everyone\n**Vote for {0}**\n'.format(t.capitalize())
@@ -81,16 +111,21 @@ async def start_vote(channel, t, opts):
     for e in opts:
         await msg.add_reaction(e)
     vote_data['messages'][msg.id] = {
-        'type': t,
-        'channel_id': channel.id,
-        'expires_at': datetime.now(pytz.timezone('Europe/Paris')) + timedelta(hours=12)
+        'type':
+        t,
+        'channel_id':
+        channel.id,
+        'expires_at':
+        datetime.now(pytz.timezone('Europe/Paris')) + timedelta(hours=12)
     }
 
-@scheduler.scheduled_job('cron', day_of_week='tue', hour=23, minute=39)
+
+@scheduler.scheduled_job('cron', day_of_week='thu', hour=16, minute=0)
 async def post_scheduled_votes():
     ch = bot.get_channel(1353371080273952939)
     await start_vote(ch, 'schedule', TIME_EMOJIS)
     await start_vote(ch, 'boss', BOSS_EMOJIS)
+
 
 @bot.event
 async def on_raw_reaction_add(payload):
@@ -126,12 +161,14 @@ async def on_raw_reaction_add(payload):
             except (discord.Forbidden, discord.HTTPException):
                 pass
 
+
 @tasks.loop(minutes=10)
 async def auto_start_votes():
     now = datetime.now(pytz.timezone('Europe/Paris'))
     for mid, meta in list(vote_data['messages'].items()):
         if now > meta['expires_at']:
             await closevote(None)
+
 
 @bot.command()
 async def help(ctx):
@@ -147,6 +184,7 @@ Example: !deactivate siege
 Shows whether each of the four reminder events is currently ON or OFF."""
     await ctx.send(f"```{help_text}```")
 
+
 @bot.event
 async def on_ready():
     load_event_status()
@@ -154,4 +192,50 @@ async def on_ready():
     auto_start_votes.start()
     print(f"✅ Bot running as {bot.user}")
 
-bot.run(TOKEN)
+
+@bot.event
+async def on_member_join(member):
+    guild = member.guild
+
+    # Replace this with the name of your Staff role
+    staff_role = discord.utils.get(guild.roles, name="Staff")
+    if not staff_role:
+        print("⚠️ Staff role not found.")
+        return
+
+    # Replace with the category name for these onboarding channels
+    category = discord.utils.get(guild.categories, name="O N B O A R D I N G")
+    if not category:
+        category = await guild.create_category("O N B O A R D I N G")
+
+    # Set permissions
+    overwrites = {
+        guild.default_role:
+        discord.PermissionOverwrite(read_messages=False),
+        member:
+        discord.PermissionOverwrite(read_messages=True, send_messages=True),
+        staff_role:
+        discord.PermissionOverwrite(read_messages=True, send_messages=True)
+    }
+
+    # Create the channel
+    safe_name = unicodedata.normalize("NFKD", member.name).encode(
+        "ascii", "ignore").decode().lower()
+    channel = await guild.create_text_channel(
+        name=f"build-{safe_name}",
+        overwrites=overwrites,
+        category=category,
+        topic=f"Private channel for {member.display_name} gear & stat review")
+
+    await channel.send(
+        f"👋 Welcome {member.mention}!\n\n"
+        "Please share a screenshot of your current **gear and build**.\n"
+        "Once reviewed, we’ll grant you access to the rest of the guild.\n"
+        "*This channel will remain open to track your progress over time.*")
+
+
+async def main():
+    await bot.start(TOKEN)
+
+
+asyncio.run(main())
