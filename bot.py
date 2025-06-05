@@ -180,16 +180,15 @@ async def current_results(ctx):
 
 @bot.command()
 async def closevote(ctx):
-    # Debug: show that closevote() was invoked, and what messages we have in memory
     print("▶️ closevote() called. vote_data['messages'].keys() =", vote_data['messages'].keys())
 
     now = datetime.now(pytz.timezone('Europe/Paris'))
     expired = []
     final_results = {}
 
-    # 1) Build up final_results from all active vote messages:
+    # 1) Build up final_results from any vote-message that we can successfully fetch:
     for mid, meta in list(vote_data['messages'].items()):
-        # We force closure either if expired or if the command was invoked manually (ctx is not None)
+        # As soon as someone runs !closevote (ctx not None), we’ll attempt every message—even if expires hasn't passed.
         if now > meta['expires_at'] or ctx is not None:
             ch = bot.get_channel(meta['channel_id'])
             if not ch:
@@ -197,25 +196,28 @@ async def closevote(ctx):
                 continue
 
             try:
-                msg = await ch.fetch_message(mid)
+                msg = await ch.fetch_message(mid)   # <-- This may raise NotFound()
             except discord.NotFound:
                 print(f"⚠️ closevote: message {mid} not found (NotFound).")
+                # Skip this ID, but keep going—maybe other IDs still fetchable
                 continue
 
-            # Count up reactions (excluding bots)
+            # If we got here, we successfully fetched `msg`. Count its reactions:
             summary = {}
             for reaction in msg.reactions:
                 users = await reaction.users().flatten()
                 summary[str(reaction.emoji)] = len([u for u in users if not u.bot])
 
+            # Save this vote’s counts under its type (i.e. 'schedule' or 'boss'):
             final_results[meta['type']] = summary
             await ch.send(
                 f"🗳️ **{meta['type'].capitalize()} vote results:**\n"
                 + "\n".join([f"{emoji}: {count} vote(s)" for emoji, count in summary.items()])
             )
+
             expired.append(mid)
 
-    # 2) Debug-print what we intend to save:
+    # 2) Only if we successfully fetched at least one message do we insert into the DB
     if final_results:
         print("🔍 closevote() final_results to save:", final_results)
         try:
@@ -224,11 +226,12 @@ async def closevote(ctx):
         except Exception as e:
             print("❌ closevote() save_vote_results() raised exception:", e)
     else:
-        print("ℹ️ closevote() found no final_results to save (maybe vote_data was empty?).")
+        print("ℹ️ closevote() found no final_results to save (no messages fetched).")
 
-    # 3) Remove expired vote messages from memory:
+    # 3) Remove all expired (or manually closed) vote‐IDs from memory
     for mid in expired:
         vote_data['messages'].pop(mid, None)
+
 
 
 async def save_vote_results(results):
