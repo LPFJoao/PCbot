@@ -8,9 +8,14 @@ from datetime import datetime, timedelta
 import unicodedata
 import threading
 import asyncio
+import psycopg2
 
 # Load .env
 TOKEN = os.getenv("DISCORD_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+def get_db_connection():
+    return psycopg2.connect(DATABASE_URL)
 
 # Intents
 intents = discord.Intents.default()
