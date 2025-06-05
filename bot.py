@@ -307,7 +307,45 @@ async def on_raw_reaction_add(payload):
                 await message.remove_reaction(reaction.emoji, user)
             except:
                 pass
+@bot.event
+async def on_member_join(member):
+    guild = member.guild
 
+    # Replace this with the name of your Staff role
+    staff_role = discord.utils.get(guild.roles, name="Staff")
+    if not staff_role:
+        print("⚠️ Staff role not found.")
+        return
+
+    # Replace with the category name for these onboarding channels
+    category = discord.utils.get(guild.categories, name="O N B O A R D I N G")
+    if not category:
+        category = await guild.create_category("O N B O A R D I N G")
+
+    # Set permissions so only the new member and Staff can see/send
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(read_messages=False),
+        member: discord.PermissionOverwrite(read_messages=True, send_messages=True),
+        staff_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
+    }
+
+    # Create a “build-<username>” channel under that category
+    safe_name = unicodedata.normalize("NFKD", member.name).encode("ascii", "ignore").decode().lower()
+    channel = await guild.create_text_channel(
+        name=f"build-{safe_name}",
+        overwrites=overwrites,
+        category=category,
+        topic=f"Private channel for {member.display_name} gear & stat review"
+    )
+
+    # Send the welcome/instructions message
+    await channel.send(
+        f"👋 Welcome {member.mention}!\n\n"
+        "Please share a screenshot of your current **gear and build**.\n"
+        "Once reviewed, we’ll grant you access to the rest of the guild.\n"
+        "*This channel will remain open to track your progress over time.*"
+    )
+    
 @bot.event
 async def on_ready():
     await init_db()
