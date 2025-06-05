@@ -185,6 +185,41 @@ Shows whether each of the four reminder events is currently ON or OFF."""
     await ctx.send(f"```{help_text}```")
 
 @bot.command()
+async def results(ctx):
+    """Show current vote results if any active vote exists."""
+    now = datetime.now(pytz.timezone('Europe/Paris'))
+    to_remove = []
+    for msg_id, meta in vote_data['messages'].items():
+        channel = bot.get_channel(meta['channel_id'])
+        if not channel:
+            continue
+        try:
+            message = await channel.fetch_message(msg_id)
+        except discord.NotFound:
+            continue
+
+        if now > meta['expires_at']:
+            continue  # Skip expired votes
+
+        counts = {}
+        for reaction in message.reactions:
+            if str(reaction.emoji) in TIME_EMOJIS or str(reaction.emoji) in BOSS_EMOJIS:
+                users = await reaction.users().flatten()
+                counts[str(reaction.emoji)] = len([u for u in users if not u.bot])
+
+        # Build results message
+        if meta['type'] == 'boss':
+            mapping = BOSS_EMOJIS
+            title = "🗳️ Boss vote results:"
+        else:
+            mapping = TIME_EMOJIS
+            title = "🗳️ Schedule vote results:"
+
+        result_lines = [f"{e}: {counts.get(e, 0)} vote(s)" for e in mapping]
+        await ctx.send(f"**{title}**\n" + "\n".join(result_lines))
+
+
+@bot.command()
 async def closevote(ctx):
     now = datetime.now(pytz.timezone('Europe/Paris'))
     expired = []
