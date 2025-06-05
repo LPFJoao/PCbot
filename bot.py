@@ -184,27 +184,64 @@ async def closevote(ctx):
     expired = []
     final_results = {}
 
+    @bot.command()
+async def closevote(ctx):
+    now = datetime.now(pytz.timezone('Europe/Paris'))
+    expired = []
+    final_results = {}
+
+    # 1) Build up final_results from all active vote messages:
     for mid, meta in list(vote_data['messages'].items()):
         if now > meta['expires_at'] or ctx is not None:
             ch = bot.get_channel(meta['channel_id'])
+            if not ch:
+                continue
+
             try:
                 msg = await ch.fetch_message(mid)
             except discord.NotFound:
                 continue
+
+            # Count up reactions (excluding bots)
             summary = {}
             for reaction in msg.reactions:
                 users = await reaction.users().flatten()
                 summary[str(reaction.emoji)] = len([u for u in users if not u.bot])
+
             final_results[meta['type']] = summary
-            await ch.send(f"🗳️ **{meta['type'].capitalize()} vote results:**\n" +
-                          "\n".join([f"{emoji}: {count} vote(s)" for emoji, count in summary.items()]))
+            await ch.send(
+                f"🗳️ **{meta['type'].capitalize()} vote results:**\n" +
+                "\n".join([f"{emoji}: {count} vote(s)" for emoji, count in summary.items()])
+            )
             expired.append(mid)
 
+    # 2) Debug-print what we intend to save:
     if final_results:
+        print("🔍 closevote() final_results:", final_results)
         await save_vote_results(final_results)
+        print("✅ closevote() running save_vote_results() succeeded.")
+    else:
+        print("ℹ️ closevote() found no final_results to save.")
 
+    # 3) Remove expired vote messages from memory:
     for mid in expired:
         vote_data['messages'].pop(mid, None)
+
+
+
+async def save_vote_results(results):
+    print("🔍 save_vote_results() called with:", results)
+    async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
+        async with conn.cursor() as cur:
+            for vote_type, summary in results.items():
+                for emoji, count in summary.items():
+                    print(f"   → Inserting row: type={vote_type}, emoji={emoji}, count={count}")
+                    await cur.execute(
+                        "INSERT INTO vote_results (type, emoji, count) VALUES (%s, %s, %s)",
+                        (vote_type, emoji, count)
+                    )
+        await conn.commit()
+        print("✅ save_vote_results() committed to database.")
 
 @bot.command()
 @commands.has_permissions(administrator=True)
