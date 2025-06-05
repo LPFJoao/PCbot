@@ -144,8 +144,11 @@ async def results(ctx):
     async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
         async with conn.cursor() as cur:
             await cur.execute("""
-                SELECT type, emoji, count FROM vote_results
-                WHERE created_at = (SELECT MAX(created_at) FROM vote_results)
+                SELECT type, emoji, count 
+                FROM vote_results
+                WHERE created_at >= (
+                    SELECT MAX(created_at) - INTERNAL '25 seconds'
+                    FROM vote_results)
             """)
             rows = await cur.fetchall()
             if not rows:
