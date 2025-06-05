@@ -29,7 +29,7 @@ def default_event_status():
         "boonstone": False,
         "riftstone": False,
         "siege": False,
-        "tax": False
+        "TAX": False
     }
 
 
