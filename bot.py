@@ -180,20 +180,26 @@ async def current_results(ctx):
 
 @bot.command()
 async def closevote(ctx):
+    # Debug: show that closevote() was invoked, and what messages we have in memory
+    print("▶️ closevote() called. vote_data['messages'].keys() =", vote_data['messages'].keys())
+
     now = datetime.now(pytz.timezone('Europe/Paris'))
     expired = []
     final_results = {}
 
     # 1) Build up final_results from all active vote messages:
     for mid, meta in list(vote_data['messages'].items()):
+        # We force closure either if expired or if the command was invoked manually (ctx is not None)
         if now > meta['expires_at'] or ctx is not None:
             ch = bot.get_channel(meta['channel_id'])
             if not ch:
+                print(f"⚠️ closevote: channel {meta['channel_id']} not found for message {mid}")
                 continue
 
             try:
                 msg = await ch.fetch_message(mid)
             except discord.NotFound:
+                print(f"⚠️ closevote: message {mid} not found (NotFound).")
                 continue
 
             # Count up reactions (excluding bots)
@@ -204,27 +210,29 @@ async def closevote(ctx):
 
             final_results[meta['type']] = summary
             await ch.send(
-                f"🗳️ **{meta['type'].capitalize()} vote results:**\n" +
-                "\n".join([f"{emoji}: {count} vote(s)" for emoji, count in summary.items()])
+                f"🗳️ **{meta['type'].capitalize()} vote results:**\n"
+                + "\n".join([f"{emoji}: {count} vote(s)" for emoji, count in summary.items()])
             )
             expired.append(mid)
 
     # 2) Debug-print what we intend to save:
     if final_results:
-        print("🔍 closevote() final_results:", final_results)
-        await save_vote_results(final_results)
-        print("✅ closevote() running save_vote_results() succeeded.")
+        print("🔍 closevote() final_results to save:", final_results)
+        try:
+            await save_vote_results(final_results)
+            print("✅ closevote() save_vote_results() succeeded.")
+        except Exception as e:
+            print("❌ closevote() save_vote_results() raised exception:", e)
     else:
-        print("ℹ️ closevote() found no final_results to save.")
+        print("ℹ️ closevote() found no final_results to save (maybe vote_data was empty?).")
 
     # 3) Remove expired vote messages from memory:
     for mid in expired:
         vote_data['messages'].pop(mid, None)
 
 
-
 async def save_vote_results(results):
-    print("🔍 save_vote_results() called with:", results)
+    print("▶️ save_vote_results() called with:", results)
     async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
         async with conn.cursor() as cur:
             for vote_type, summary in results.items():
@@ -236,6 +244,7 @@ async def save_vote_results(results):
                     )
         await conn.commit()
         print("✅ save_vote_results() committed to database.")
+
 
 @bot.command()
 @commands.has_permissions(administrator=True)
