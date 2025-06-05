@@ -48,7 +48,6 @@ BOSS_EMOJIS = {
     '<:Manti:1379778716388818964>': 'Manticus'
 }
 
-# Initialize database
 async def init_db():
     async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
         async with conn.cursor() as cur:
@@ -147,7 +146,7 @@ async def results(ctx):
                 SELECT type, emoji, count 
                 FROM vote_results
                 WHERE created_at >= (
-                    SELECT MAX(created_at) - INTERNAL '25 seconds'
+                    SELECT MAX(created_at) - INTERVAL '25 seconds'
                     FROM vote_results)
             """)
             rows = await cur.fetchall()
@@ -198,7 +197,7 @@ async def closevote(ctx):
                 summary[str(reaction.emoji)] = len([u for u in users if not u.bot])
             final_results[meta['type']] = summary
             await ch.send(f"🗳️ **{meta['type'].capitalize()} vote results:**\n" +
-                         "\n".join([f"{emoji}: {count} vote(s)" for emoji, count in summary.items()]))
+                          "\n".join([f"{emoji}: {count} vote(s)" for emoji, count in summary.items()]))
             expired.append(mid)
 
     if final_results:
