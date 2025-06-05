@@ -184,12 +184,6 @@ async def closevote(ctx):
     expired = []
     final_results = {}
 
-    @bot.command()
-async def closevote(ctx):
-    now = datetime.now(pytz.timezone('Europe/Paris'))
-    expired = []
-    final_results = {}
-
     # 1) Build up final_results from all active vote messages:
     for mid, meta in list(vote_data['messages'].items()):
         if now > meta['expires_at'] or ctx is not None:
