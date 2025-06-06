@@ -6,7 +6,7 @@ import pytz
 from datetime import datetime, timedelta
 import unicodedata
 import asyncio
-import psycopg
+import asyncpg  # <<— now using asyncpg instead of psycopg
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  Load environment variables
@@ -59,71 +59,73 @@ BOSS_EMOJIS = {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  DATABASE INITIALIZATION
+#  DATABASE INITIALIZATION & HELPERS (using asyncpg)
 # ──────────────────────────────────────────────────────────────────────────────
 async def init_db():
-    async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
-        async with conn.cursor() as cur:
-            # Create (or ensure) event_status table
-            await cur.execute("""
-                CREATE TABLE IF NOT EXISTS event_status (
-                    event TEXT PRIMARY KEY,
-                    enabled BOOLEAN NOT NULL
-                )
-            """)
-            # Insert the default events if they do not already exist
-            for event, enabled in default_event_status().items():
-                await cur.execute("""
-                    INSERT INTO event_status (event, enabled)
-                    VALUES (%s, %s)
-                    ON CONFLICT (event) DO NOTHING
-                """, (event, enabled))
+    """
+    Create tables if they do not exist yet.
+    """
+    conn = await asyncpg.connect(DATABASE_URL)
+    # Create event_status table
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS event_status (
+            event TEXT PRIMARY KEY,
+            enabled BOOLEAN NOT NULL
+        )
+    """)
+    # Insert default events
+    for event, enabled in default_event_status().items():
+        await conn.execute("""
+            INSERT INTO event_status(event, enabled)
+            VALUES($1, $2)
+            ON CONFLICT (event) DO NOTHING
+        """, event, enabled)
 
-            # Create (or ensure) vote_results table
-            await cur.execute("""
-                CREATE TABLE IF NOT EXISTS vote_results (
-                    id SERIAL PRIMARY KEY,
-                    type TEXT NOT NULL,
-                    emoji TEXT NOT NULL,
-                    count INTEGER NOT NULL,
-                    created_at TIMESTAMPTZ DEFAULT NOW()
-                )
-            """)
-        await conn.commit()
+    # Create vote_results table
+    await conn.execute("""
+        CREATE TABLE IF NOT EXISTS vote_results (
+            id SERIAL PRIMARY KEY,
+            type TEXT NOT NULL,
+            emoji TEXT NOT NULL,
+            count INTEGER NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT NOW()
+        )
+    """)
+    await conn.close()
 
 async def load_event_status():
     global event_status
-    async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
-        async with conn.cursor() as cur:
-            await cur.execute("SELECT event, enabled FROM event_status")
-            rows = await cur.fetchall()
-            # Build a dictionary back into event_status
-            event_status = {event: enabled for event, enabled in rows}
+    conn = await asyncpg.connect(DATABASE_URL)
+    rows = await conn.fetch("SELECT event, enabled FROM event_status")
+    await conn.close()
+    # Build dictionary
+    event_status = {r['event']: r['enabled'] for r in rows}
 
 async def save_event_status():
-    async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
-        async with conn.cursor() as cur:
-            for event, enabled in event_status.items():
-                await cur.execute(
-                    "UPDATE event_status SET enabled = %s WHERE event = %s",
-                    (enabled, event)
-                )
-        await conn.commit()
+    conn = await asyncpg.connect(DATABASE_URL)
+    for event, enabled in event_status.items():
+        await conn.execute(
+            "UPDATE event_status SET enabled = $1 WHERE event = $2",
+            enabled, event
+        )
+    await conn.close()
 
 async def save_vote_results(results):
-    """Insert the final vote counts into vote_results table."""
+    """
+    Insert the final vote counts into vote_results table.
+    `results` is a dict: { "boss": {"<:Daigon:...>": 3, ...}, "schedule": {"🕙":2, ...} }
+    """
     print("▶️ save_vote_results() called with:", results)
-    async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
-        async with conn.cursor() as cur:
-            for vote_type, summary in results.items():
-                for emoji, count in summary.items():
-                    print(f"   → Inserting row: type={vote_type}, emoji={emoji}, count={count}")
-                    await cur.execute(
-                        "INSERT INTO vote_results (type, emoji, count) VALUES (%s, %s, %s)",
-                        (vote_type, emoji, count)
-                    )
-        await conn.commit()
-        print("✅ save_vote_results() committed to database.")
+    conn = await asyncpg.connect(DATABASE_URL)
+    for vote_type, summary in results.items():
+        for emoji, count in summary.items():
+            print(f"   → Inserting row: type={vote_type}, emoji={emoji}, count={count}")
+            await conn.execute(
+                "INSERT INTO vote_results(type, emoji, count) VALUES($1, $2, $3)",
+                vote_type, emoji, count
+            )
+    await conn.close()
+    print("✅ save_vote_results() committed to database.")
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  REMINDER COMMANDS (activate/deactivate/status)
@@ -160,7 +162,7 @@ async def status(ctx):
 #  VOTING SYSTEM
 # ──────────────────────────────────────────────────────────────────────────────
 async def start_vote(channel, t, opts):
-    """Post a new vote message (“@everyone • Vote for X”) and add reactions."""
+    """Post a new vote message (“@everyone • Vote for X” ) and add reactions."""
     desc = '@everyone\n**Vote for {0}**\n'.format(t.capitalize())
     for e, label in opts.items():
         desc += f"{e} → {label}\n"
@@ -170,7 +172,7 @@ async def start_vote(channel, t, opts):
     for e in opts.keys():
         await msg.add_reaction(e)
 
-    # Keep track of this message ID in vote_data
+    # Keep this message in memory
     vote_data['messages'][msg.id] = {
         'type': t,
         'channel_id': channel.id,
@@ -180,33 +182,34 @@ async def start_vote(channel, t, opts):
 @bot.command()
 async def results(ctx):
     """Fetch the most recent saved vote_results rows (from the DB)."""
-    async with await psycopg.AsyncConnection.connect(DATABASE_URL) as conn:
-        async with conn.cursor() as cur:
-            await cur.execute("""
-                SELECT type, emoji, count
-                FROM vote_results
-                WHERE created_at >= (
-                    SELECT MAX(created_at) - INTERVAL '25 seconds'
-                    FROM vote_results
-                )
-            """)
-            rows = await cur.fetchall()
-            if not rows:
-                await ctx.send("No vote results found yet.")
-                return
+    conn = await asyncpg.connect(DATABASE_URL)
+    rows = await conn.fetch("""
+        SELECT type, emoji, count
+          FROM vote_results
+         WHERE created_at >= (
+             SELECT MAX(created_at) - INTERVAL '25 seconds'
+               FROM vote_results
+         )
+    """)
+    await conn.close()
 
-            grouped = {}
-            for vote_type, emoji, count in rows:
-                grouped.setdefault(vote_type, []).append((emoji, count))
+    if not rows:
+        await ctx.send("No vote results found yet.")
+        return
 
-            for vote_type, entries in grouped.items():
-                title = "🗳️ Boss vote results:" if vote_type == "boss" else "🗳️ Schedule vote results:"
-                lines = [f"{emoji}: {count} vote(s)" for emoji, count in entries]
-                await ctx.send(f"**{title}**\n" + "\n".join(lines))
+    # Group by vote_type
+    grouped = {}
+    for r in rows:
+        grouped.setdefault(r['type'], []).append((r['emoji'], r['count']))
+
+    for vote_type, entries in grouped.items():
+        title = "🗳️ Boss vote results:" if vote_type == "boss" else "🗳️ Schedule vote results:"
+        lines = [f"{emoji}: {count} vote(s)" for emoji, count in entries]
+        await ctx.send(f"**{title}**\n" + "\n".join(lines))
 
 @bot.command()
 async def current_results(ctx):
-    """Show live reaction counts for any currently‐active vote messages."""
+    """Show live reaction counts for any active vote messages."""
     for msg_id, meta in vote_data['messages'].items():
         ch = bot.get_channel(meta['channel_id'])
         if not ch:
@@ -228,7 +231,7 @@ async def current_results(ctx):
 @bot.command()
 async def closevote(ctx):
     """
-    1) “Close” any active votes (either expired or forced by !closevote).
+    1) “Close” any active votes (expired or manual).
     2) Post a summary in each vote’s channel.
     3) Insert those final counts into vote_results table.
     4) Remove them from memory.
@@ -239,9 +242,7 @@ async def closevote(ctx):
     expired = []
     final_results = {}
 
-    # 1) Gather reactions on every vote‐message still in memory
     for mid, meta in list(vote_data['messages'].items()):
-        # Close it if it’s expired or if !closevote was invoked (ctx is not None)
         if now > meta['expires_at'] or ctx is not None:
             ch = bot.get_channel(meta['channel_id'])
             if not ch:
@@ -265,10 +266,9 @@ async def closevote(ctx):
                 f"🗳️ **{meta['type'].capitalize()} vote results:**\n" +
                 "\n".join([f"{emoji}: {count} vote(s)" for emoji, count in summary.items()])
             )
-
             expired.append(mid)
 
-    # 2) Insert into DB if we have any real results
+    # Insert into DB if any results
     if final_results:
         print("🔍 closevote() final_results to save:", final_results)
         try:
@@ -279,7 +279,7 @@ async def closevote(ctx):
     else:
         print("ℹ️ closevote() found no final_results to save (maybe vote_data was empty?).")
 
-    # 3) Remove them from memory
+    # Remove expired messages from memory
     for mid in expired:
         vote_data['messages'].pop(mid, None)
 
@@ -287,22 +287,21 @@ async def closevote(ctx):
 @commands.has_permissions(administrator=True)
 async def startvote(ctx):
     """
-    Manually start both the “schedule” vote and the “boss” vote
-    (as if it were Thursday 16:00).
+    Manually start both the “schedule” vote and the “boss” vote.
     """
     await start_vote(ctx.channel, 'schedule', TIME_EMOJIS)
     await start_vote(ctx.channel, 'boss', BOSS_EMOJIS)
     await ctx.send("✅ Schedule and Boss votes started manually.")
 
-# Schedule the weekly Thursday 16:00 votes automatically
+# Automatically run on Thursdays at 16:00 (Europe/Paris)
 @scheduler.scheduled_job('cron', day_of_week='thu', hour=16, minute=0)
 async def post_scheduled_votes():
-    # Replace 1353371080273952939 with your real channel ID
+    # Replace this ID with the channel you want both polls to post into
     ch = bot.get_channel(1353371080273952939)
     await start_vote(ch, 'schedule', TIME_EMOJIS)
     await start_vote(ch, 'boss', BOSS_EMOJIS)
 
-# Periodically check if any stored vote‐messages have just expired
+# Every 10 minutes, check for expired votes and close them automatically
 @tasks.loop(minutes=10)
 async def auto_start_votes():
     now = datetime.now(pytz.timezone('Europe/Paris'))
@@ -328,7 +327,7 @@ async def help(ctx):
 async def on_raw_reaction_add(payload):
     """
     Enforce a “one boss‐vote only” rule:
-    if a user clicks one boss emoji, remove any other boss emojis they might have added.
+    if a user clicks one boss emoji, remove any other boss emoji they might have added.
     """
     vm = vote_data['messages'].get(payload.message_id)
     if not vm or vm['type'] != 'boss':
@@ -364,27 +363,30 @@ async def on_raw_reaction_add(payload):
 # ──────────────────────────────────────────────────────────────────────────────
 @bot.event
 async def on_member_join(member):
+    # DEBUG: confirm that we see the event
     print("▶️ on_member_join fired for:", member.name)
+
     guild = member.guild
 
-    # Make sure the “Staff” role exists exactly as spelled below:
+    # 1) Make sure the Staff role exists exactly as spelled below:
     staff_role = discord.utils.get(guild.roles, name="Staff")
     if not staff_role:
         print("⚠️ Staff role not found.")
         return
 
-    # Make sure the category “O N B O A R D I N G” exists (spaces and casing must match):
+    # 2) Make sure the category exists exactly as spelled (spaces/case):
     category = discord.utils.get(guild.categories, name="O N B O A R D I N G")
     if not category:
         category = await guild.create_category("O N B O A R D I N G")
 
-    # Lock permissions so only the new member + Staff can see/send
+    # 3) Set permissions so only the new member + Staff can see/send
     overwrites = {
         guild.default_role: discord.PermissionOverwrite(read_messages=False),
         member: discord.PermissionOverwrite(read_messages=True, send_messages=True),
         staff_role: discord.PermissionOverwrite(read_messages=True, send_messages=True)
     }
 
+    # 4) Create a “build-<username>” channel
     safe_name = unicodedata.normalize("NFKD", member.name).encode("ascii", "ignore").decode().lower()
     channel = await guild.create_text_channel(
         name=f"build-{safe_name}",
@@ -393,6 +395,7 @@ async def on_member_join(member):
         topic=f"Private channel for {member.display_name} gear & stat review"
     )
 
+    # 5) Send the welcome/instructions message
     await channel.send(
         f"👋 Welcome {member.mention}!\n\n"
         "Please share a screenshot of your current **gear and build**.\n"
@@ -401,7 +404,7 @@ async def on_member_join(member):
     )
 
 # ──────────────────────────────────────────────────────────────────────────────
-#  ON_READY: Start DB, load state, kick off scheduler/loops
+#  ON_READY: Start DB, load state, kick off scheduler & loops
 # ──────────────────────────────────────────────────────────────────────────────
 @bot.event
 async def on_ready():
