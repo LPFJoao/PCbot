@@ -364,6 +364,7 @@ async def on_raw_reaction_add(payload):
 # ──────────────────────────────────────────────────────────────────────────────
 @bot.event
 async def on_member_join(member):
+    print("▶️ on_member_join fired for:", member.name)
     guild = member.guild
 
     # Make sure the “Staff” role exists exactly as spelled below:
