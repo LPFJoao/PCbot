@@ -1,4 +1,4 @@
-psycopg==3.2.0
+asyncpg
 apscheduler
 discord.py
 python-dotenv
