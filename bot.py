@@ -140,6 +140,16 @@ async def activate(ctx, event: str):
     else:
         await ctx.send("❌ Unknown event. Options: boonstone, riftstone, siege, tax.")
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+@bot.command()
+async def testsend(ctx):
+    ch = bot.get_channel(1371898595288158231)  # your channel ID
+    await ch.send("✅ testsend: send perms are good!")
+    await ctx.send("…and I just tested it.")
+
+# ──────────────────────────────────────────────────────────────────────────────
+
 @bot.command()
 async def deactivate(ctx, event: str):
     key = event.lower()
@@ -247,9 +257,11 @@ async def closevote(ctx):
         try:
             msg = await ch.fetch_message(mid)
             print(f"   → fetched message {msg.id} with {len(msg.reactions)} reactions")
+            print("   🛠️  Passed fetch, about to build summary")
         except Exception as e:
             print(f"   ❌ fetch_message({mid}) failed:", type(e).__name__, e)
             continue
+            
 
         # ←— NEW: build a summary and log it
         summary = {}
