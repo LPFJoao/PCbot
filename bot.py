@@ -237,15 +237,12 @@ async def closevote(ctx):
 
     for mid, meta in list(vote_data['messages'].items()):
         print(f"🔍 Processing message {mid} (type={meta['type']})")
-        
-        # 1) get the channel
         ch = bot.get_channel(meta['channel_id'])
         print("   → bot.get_channel returned:", ch)
         if not ch:
             print(f"   ⚠️ Missing channel {meta['channel_id']}, skipping")
             continue
 
-        # 2) fetch the original poll message
         try:
             msg = await ch.fetch_message(mid)
             print(f"   → fetched message {msg.id} with {len(msg.reactions)} reactions")
@@ -253,24 +250,18 @@ async def closevote(ctx):
             print(f"   ❌ fetch_message({mid}) failed:", type(e).__name__, e)
             continue
 
-        # 3) tally the votes
-        summary = {}
-        for reaction in msg.reactions:
-            users = await reaction.users().flatten()
-            summary[str(reaction.emoji)] = len([u for u in users if not u.bot])
-        final_results[meta['type']] = summary
+        # ←— these three lines must be here
+        summary = { str(r.emoji): len([u for u in (await r.users().flatten()) if not u.bot]) 
+                    for r in msg.reactions }
         print("   → summary:", summary)
-
-        # 4) send the summary back to Discord
         try:
             sent = await ch.send(
                 f"🗳️ **{meta['type'].capitalize()} vote results:**\n" +
-                "\n".join(f"{emoji}: {count} vote(s)" for emoji, count in summary.items())
+                "\n".join(f"{e}: {c} vote(s)" for e, c in summary.items())
             )
             print(f"   ✅ ch.send succeeded (message {sent.id})")
         except Exception as e:
             print("   ❌ ch.send failed:", type(e).__name__, e)
-
         expired.append(mid)
 
     # 5) (unchanged) persist to DB & clean up…
