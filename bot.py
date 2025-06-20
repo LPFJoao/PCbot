@@ -155,7 +155,7 @@ async def on_member_join(member):
         overwrites=overwrites,
         topic=f"Private channel for {member.display_name} gear review"
     )
-    await channel.send(f"👋 Welcome {member.mention}!\nPlease share a screenshot of your build.")
+    await channel.send(f"👋 Welcome {member.mention}!\nPlease share a screenshot of your build.\nPlease share a screenshot of your current gear and build.\nThis channel will remain open to answer question related to your build, or ask for specific items from the guild storage.")
 
 # ───────────────────────────────────────────────────────────────────────────
 # Button-based Poll Implementation
@@ -206,7 +206,7 @@ async def create_poll(channel, question: str, options: list[str], timeout_s: flo
 # Scheduled Weekly Polls: Thursdays at 16:00 Paris time
 # ───────────────────────────────────────────────────────────────────────────
 @scheduler.scheduled_job(
-    trigger=CronTrigger(day_of_week='fri', hour=15, minute=0, timezone='Europe/Paris')
+    trigger=CronTrigger(day_of_week='thu', hour=16, minute=0, timezone='Europe/Paris')
 )
 async def weekly_polls():
     ch = bot.get_channel(1353371080273952939)  # your channel ID
