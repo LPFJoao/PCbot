@@ -304,7 +304,9 @@ async def post_scheduled_votes():
 # Every 10 minutes, check for expired votes and close them automatically
 @tasks.loop(minutes=10)
 async def auto_start_votes():
-"""Check for any expired votes and close them in a single batch."""
+    """
+    Check for any expired votes and close them in a single batch.
+    """
     now = datetime.now(pytz.timezone('Europe/Paris'))
     if any(now > meta['expires_at'] for meta in vote_data['messages'].values()):
         await closevote(None)
