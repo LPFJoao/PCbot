@@ -47,7 +47,7 @@ vote_data = {'messages': {}, 'results': {}}
 TIME_EMOJIS = {
     '🕙': 'Friday 22:00',
     '🕕': 'Saturday 18:00',
-    '🕘': 'Saturday 21:00',
+    '🕘': 'Saturday 22:00',
     '🕔': 'Sunday 18:00',
     '🕐': 'Sunday 21:00'
 }
@@ -304,10 +304,13 @@ async def post_scheduled_votes():
 # Every 10 minutes, check for expired votes and close them automatically
 @tasks.loop(minutes=10)
 async def auto_start_votes():
+ """Check for any expired votes and close them in a single batch."""
     now = datetime.now(pytz.timezone('Europe/Paris'))
     for mid, meta in list(vote_data['messages'].items()):
         if now > meta['expires_at']:
             await closevote(None)
+    if any(now > meta['expires_at'] for meta in vote_data['messages'].values()):
+        await closevote(None)
 
 @bot.command()
 async def help(ctx):
