@@ -244,6 +244,7 @@ async def closevote(ctx):
     final_results = {}
 
     for mid, meta in list(vote_data['messages'].items()):
+        print(f"🔍 Processing message {mid} (type={meta['type']})")
         if now > meta['expires_at'] or ctx is not None:
             ch = bot.get_channel(meta['channel_id'])
             if not ch:
@@ -252,6 +253,7 @@ async def closevote(ctx):
 
             try:
                 msg = await ch.fetch_message(mid)
+                print(f"   → fetched message {msg.id} with {len(msg.reactions)} reactions")
             except discord.NotFound:
                 print(f"⚠️ closevote: message {mid} not found. Skipping.")
                 continue
