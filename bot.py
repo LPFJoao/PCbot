@@ -260,6 +260,7 @@ async def closevote(ctx):
             msg = await ch.fetch_message(mid)
             print(f"   → fetched message {msg.id} with {len(msg.reactions)} reactions")
             print("   🛠️ Passed fetch, about to build summary")
+            await ctx.send("🧪 passed fetch—building summary now")
         except Exception as e:
             print(f"   ❌ fetch_message({mid}) failed:", type(e).__name__, e)
             continue
