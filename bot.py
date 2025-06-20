@@ -246,7 +246,16 @@ async def closevote(ctx):
     final_results = {}
 
     for mid, meta in list(vote_data['messages'].items()):
-        # … your bot.get_channel() + fetch block …
+        print(f"🔍 Processing message {mid} (type={meta['type']})")
+
+        # ← get the channel FIRST
+        ch = bot.get_channel(meta['channel_id'])
+        print("   → bot.get_channel returned:", ch)
+        if not ch:
+            print(f"   ⚠️ Missing channel {meta['channel_id']}, skipping")
+            continue
+
+        # ← then fetch inside try
         try:
             msg = await ch.fetch_message(mid)
             print(f"   → fetched message {msg.id} with {len(msg.reactions)} reactions")
@@ -256,16 +265,15 @@ async def closevote(ctx):
             print(f"   ❌ fetch_message({mid}) failed:", type(e).__name__, e)
             continue
 
-        # ─── Build & log the summary ─────────────────────────────────────────────
+        # ─── Build & log the summary ───────────────────────────────────────────
         summary = {}
         for reaction in msg.reactions:
             users = await reaction.users().flatten()
-            count = len([u for u in users if not u.bot])
-            summary[str(reaction.emoji)] = count
+            summary[str(reaction.emoji)] = len([u for u in users if not u.bot])
         print("   → summary:", summary)
         await ctx.send(f"🧪 summary is: {summary}")
 
-        # ─── Send the official results back to the poll channel ────────────────
+        # ─── Send the official results back to the poll channel ───────────────
         try:
             sent = await ch.send(
                 f"🗳️ **{meta['type'].capitalize()} vote results:**\n"
@@ -277,9 +285,8 @@ async def closevote(ctx):
 
         expired.append(mid)
 
-    # 5) persist & clean up (unchanged)
+    # ─── persist & clean up (unchanged) ────────────────────────────────────
     if final_results:
-        print("🔍 final_results to save:", final_results)
         try:
             await save_vote_results(final_results)
             print("✅ save_vote_results() succeeded.")
@@ -290,6 +297,7 @@ async def closevote(ctx):
 
     for mid in expired:
         vote_data['messages'].pop(mid, None)
+
 
 @bot.command()
 @commands.has_permissions(administrator=True)
