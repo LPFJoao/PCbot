@@ -230,6 +230,7 @@ async def current_results(ctx):
 
 @bot.command()
 async def closevote(ctx):
+    print("▶️ closevote invoked; ctx =", ctx, "vote_data =", vote_data)
     """
     1) “Close” any active votes (expired or manual).
     2) Post a summary in each vote’s channel.
