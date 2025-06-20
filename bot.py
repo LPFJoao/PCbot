@@ -237,6 +237,7 @@ async def closevote(ctx):
 
     for mid, meta in list(vote_data['messages'].items()):
         print(f"🔍 Processing message {mid} (type={meta['type']})")
+
         ch = bot.get_channel(meta['channel_id'])
         print("   → bot.get_channel returned:", ch)
         if not ch:
@@ -250,19 +251,26 @@ async def closevote(ctx):
             print(f"   ❌ fetch_message({mid}) failed:", type(e).__name__, e)
             continue
 
-        # ←— these three lines must be here
-        summary = { str(r.emoji): len([u for u in (await r.users().flatten()) if not u.bot]) 
-                    for r in msg.reactions }
+        # ←— NEW: build a summary and log it
+        summary = {}
+        for reaction in msg.reactions:
+            users = await reaction.users().flatten()
+            count = len([u for u in users if not u.bot])
+            summary[str(reaction.emoji)] = count
         print("   → summary:", summary)
+
+        # ←— NEW: try sending back to Discord and log success/failure
         try:
             sent = await ch.send(
                 f"🗳️ **{meta['type'].capitalize()} vote results:**\n" +
-                "\n".join(f"{e}: {c} vote(s)" for e, c in summary.items())
+                "\n".join(f"{emoji}: {c} vote(s)" for emoji, c in summary.items())
             )
             print(f"   ✅ ch.send succeeded (message {sent.id})")
         except Exception as e:
             print("   ❌ ch.send failed:", type(e).__name__, e)
+
         expired.append(mid)
+
 
     # 5) (unchanged) persist to DB & clean up…
     if final_results:
