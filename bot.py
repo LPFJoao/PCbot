@@ -245,45 +245,37 @@ async def closevote(ctx):
     expired = []
     final_results = {}
 
-    for mid, meta in list(vote_data['messages'].items()):
-        print(f"🔍 Processing message {mid} (type={meta['type']})")
+for mid, meta in list(vote_data['messages'].items()):
+    # … your bot.get_channel() + fetch block …
+    try:
+        msg = await ch.fetch_message(mid)
+        print(f"   → fetched message {msg.id} with {len(msg.reactions)} reactions")
+        print("   🛠️ Passed fetch, about to build summary")
+        await ctx.send("🧪 passed fetch—building summary now")
+    except Exception as e:
+        print(f"   ❌ fetch_message({mid}) failed:", type(e).__name__, e)
+        continue
 
-        # 1) get the channel
-        ch = bot.get_channel(meta['channel_id'])
-        print("   → bot.get_channel returned:", ch)
-        if not ch:
-            print(f"   ⚠️ Missing channel {meta['channel_id']}, skipping")
-            continue
+    # ─── Build & log the summary ─────────────────────────────────────────────
+    summary = {}
+    for reaction in msg.reactions:
+        users = await reaction.users().flatten()
+        count = len([u for u in users if not u.bot])
+        summary[str(reaction.emoji)] = count
+    print("   → summary:", summary)
+    await ctx.send(f"🧪 summary is: {summary}")
 
-        # 2) fetch the original poll message
-        try:
-            msg = await ch.fetch_message(mid)
-            print(f"   → fetched message {msg.id} with {len(msg.reactions)} reactions")
-            print("   🛠️ Passed fetch, about to build summary")
-            await ctx.send("🧪 passed fetch—building summary now")
-        except Exception as e:
-            print(f"   ❌ fetch_message({mid}) failed:", type(e).__name__, e)
-            continue
+    # ─── Send the official results back to the poll channel ────────────────
+    try:
+        sent = await ch.send(
+            f"🗳️ **{meta['type'].capitalize()} vote results:**\n"
+            + "\n".join(f"{e}: {c} vote(s)" for e, c in summary.items())
+        )
+        print(f"   ✅ ch.send succeeded (message {sent.id})")
+    except Exception as e:
+        print("   ❌ ch.send failed:", type(e).__name__, e)
 
-        # 3) tally the votes
-        summary = {}
-        for reaction in msg.reactions:
-            users = await reaction.users().flatten()
-            count = len([u for u in users if not u.bot])
-            summary[str(reaction.emoji)] = count
-        print("   → summary:", summary)
-
-        # 4) send the summary back to Discord
-        try:
-            sent = await ch.send(
-                f"🗳️ **{meta['type'].capitalize()} vote results:**\n"
-                + "\n".join(f"{emoji}: {c} vote(s)" for emoji, c in summary.items())
-            )
-            print(f"   ✅ ch.send succeeded (message {sent.id})")
-        except Exception as e:
-            print("   ❌ ch.send failed:", type(e).__name__, e)
-
-        expired.append(mid)
+    expired.append(mid)
 
     # 5) persist & clean up (unchanged)
     if final_results:
