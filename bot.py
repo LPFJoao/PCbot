@@ -248,22 +248,23 @@ async def closevote(ctx):
     for mid, meta in list(vote_data['messages'].items()):
         print(f"🔍 Processing message {mid} (type={meta['type']})")
 
+        # 1) get the channel
         ch = bot.get_channel(meta['channel_id'])
         print("   → bot.get_channel returned:", ch)
         if not ch:
             print(f"   ⚠️ Missing channel {meta['channel_id']}, skipping")
             continue
 
+        # 2) fetch the original poll message
         try:
             msg = await ch.fetch_message(mid)
             print(f"   → fetched message {msg.id} with {len(msg.reactions)} reactions")
-            print("   🛠️  Passed fetch, about to build summary")
+            print("   🛠️ Passed fetch, about to build summary")
         except Exception as e:
             print(f"   ❌ fetch_message({mid}) failed:", type(e).__name__, e)
             continue
-            
 
-        # ←— NEW: build a summary and log it
+        # 3) tally the votes
         summary = {}
         for reaction in msg.reactions:
             users = await reaction.users().flatten()
@@ -271,11 +272,11 @@ async def closevote(ctx):
             summary[str(reaction.emoji)] = count
         print("   → summary:", summary)
 
-        # ←— NEW: try sending back to Discord and log success/failure
+        # 4) send the summary back to Discord
         try:
             sent = await ch.send(
-                f"🗳️ **{meta['type'].capitalize()} vote results:**\n" +
-                "\n".join(f"{emoji}: {c} vote(s)" for emoji, c in summary.items())
+                f"🗳️ **{meta['type'].capitalize()} vote results:**\n"
+                + "\n".join(f"{emoji}: {c} vote(s)" for emoji, c in summary.items())
             )
             print(f"   ✅ ch.send succeeded (message {sent.id})")
         except Exception as e:
@@ -283,8 +284,7 @@ async def closevote(ctx):
 
         expired.append(mid)
 
-
-    # 5) (unchanged) persist to DB & clean up…
+    # 5) persist & clean up (unchanged)
     if final_results:
         print("🔍 final_results to save:", final_results)
         try:
