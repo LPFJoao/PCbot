@@ -230,59 +230,60 @@ async def current_results(ctx):
 
 @bot.command()
 async def closevote(ctx):
-    print("▶️ closevote invoked; ctx =", ctx, "vote_data =", vote_data)
-    """
-    1) “Close” any active votes (expired or manual).
-    2) Post a summary in each vote’s channel.
-    3) Insert those final counts into vote_results table.
-    4) Remove them from memory.
-    """
-    print("▶️ closevote() called. vote_data['messages'].keys() =", vote_data['messages'].keys())
-
+    print("▶️ closevote invoked; ctx =", ctx)
     now = datetime.now(pytz.timezone('Europe/Paris'))
     expired = []
     final_results = {}
 
     for mid, meta in list(vote_data['messages'].items()):
         print(f"🔍 Processing message {mid} (type={meta['type']})")
-        if now > meta['expires_at'] or ctx is not None:
-            ch = bot.get_channel(meta['channel_id'])
-            if not ch:
-                print(f"⚠️ closevote: channel {meta['channel_id']} not found for message {mid}")
-                continue
+        
+        # 1) get the channel
+        ch = bot.get_channel(meta['channel_id'])
+        print("   → bot.get_channel returned:", ch)
+        if not ch:
+            print(f"   ⚠️ Missing channel {meta['channel_id']}, skipping")
+            continue
 
-            try:
-                msg = await ch.fetch_message(mid)
-                print(f"   → fetched message {msg.id} with {len(msg.reactions)} reactions")
-            except discord.NotFound:
-                print(f"⚠️ closevote: message {mid} not found. Skipping.")
-                continue
+        # 2) fetch the original poll message
+        try:
+            msg = await ch.fetch_message(mid)
+            print(f"   → fetched message {msg.id} with {len(msg.reactions)} reactions")
+        except Exception as e:
+            print(f"   ❌ fetch_message({mid}) failed:", type(e).__name__, e)
+            continue
 
-            # Count up reactions (excluding bots)
-            summary = {}
-            for reaction in msg.reactions:
-                users = await reaction.users().flatten()
-                summary[str(reaction.emoji)] = len([u for u in users if not u.bot])
+        # 3) tally the votes
+        summary = {}
+        for reaction in msg.reactions:
+            users = await reaction.users().flatten()
+            summary[str(reaction.emoji)] = len([u for u in users if not u.bot])
+        final_results[meta['type']] = summary
+        print("   → summary:", summary)
 
-            final_results[meta['type']] = summary
-            await ch.send(
+        # 4) send the summary back to Discord
+        try:
+            sent = await ch.send(
                 f"🗳️ **{meta['type'].capitalize()} vote results:**\n" +
-                "\n".join([f"{emoji}: {count} vote(s)" for emoji, count in summary.items()])
+                "\n".join(f"{emoji}: {count} vote(s)" for emoji, count in summary.items())
             )
-            expired.append(mid)
+            print(f"   ✅ ch.send succeeded (message {sent.id})")
+        except Exception as e:
+            print("   ❌ ch.send failed:", type(e).__name__, e)
 
-    # Insert into DB if any results
+        expired.append(mid)
+
+    # 5) (unchanged) persist to DB & clean up…
     if final_results:
-        print("🔍 closevote() final_results to save:", final_results)
+        print("🔍 final_results to save:", final_results)
         try:
             await save_vote_results(final_results)
-            print("✅ closevote() save_vote_results() succeeded.")
+            print("✅ save_vote_results() succeeded.")
         except Exception as e:
-            print("❌ closevote() save_vote_results() raised exception:", e)
+            print("❌ save_vote_results() raised:", e)
     else:
-        print("ℹ️ closevote() found no final_results to save (maybe vote_data was empty?).")
+        print("ℹ️ No results to save.")
 
-    # Remove expired messages from memory
     for mid in expired:
         vote_data['messages'].pop(mid, None)
 
