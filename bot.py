@@ -155,7 +155,7 @@ async def on_member_join(member):
         overwrites=overwrites,
         topic=f"Private channel for {member.display_name} gear review"
     )
-    await channel.send(f"👋 Welcome {member.mention}!\nPlease share a screenshot of your build.\nPlease share a screenshot of your current gear and build.\nThis channel will remain open to answer question related to your build, or ask for specific items from the guild storage.")
+    await channel.send(f"👋 Welcome {member.mention}!\nPlease share a screenshot of your build.")
 
 # ───────────────────────────────────────────────────────────────────────────
 # Button-based Poll Implementation
@@ -183,7 +183,7 @@ class PollButton(Button):
         )
 
 class PollView(View):
-    def __init__(self, options: list[str], timeout: float = 3600.0):
+    def __init__(self, options: list[str], timeout: float = 2*60):  # 12h default
         super().__init__(timeout=timeout)
         self.counts = {opt: 0 for opt in options}
         self.voters = {}
@@ -191,13 +191,19 @@ class PollView(View):
             self.add_item(PollButton(opt, self.counts, self.voters))
 
     async def on_timeout(self):
+        # disable all buttons
         for item in self.children:
             item.disabled = True
-        msg = self.message
-        await msg.edit(view=self)
+        # build final summary
+        lines = [f"{opt}: {cnt} vote(s)" for opt, cnt in self.counts.items()]
+        results = "📊 **Poll Closed - Final Results**\n" + "\n".join(lines)
+        # edit original message with results and disabled view
+        await self.message.edit(content=results, view=self)
+        # send a separate summary message
+        await self.message.channel.send(f"@everyone\n{results}")
 
 async def create_poll(channel, question: str, options: list[str], timeout_s: float = 12*3600):
-    header = f"📢 **{question}**\nClick a button to vote!"
+    header = f"@everyone\n📢 **{question}**\nClick a button to vote!"
     view = PollView(options, timeout=timeout_s)
     msg = await channel.send(header, view=view)
     view.message = msg
@@ -206,23 +212,23 @@ async def create_poll(channel, question: str, options: list[str], timeout_s: flo
 # Scheduled Weekly Polls: Thursdays at 16:00 Paris time
 # ───────────────────────────────────────────────────────────────────────────
 @scheduler.scheduled_job(
-    trigger=CronTrigger(day_of_week='thu', hour=16, minute=0, timezone='Europe/Paris')
+    trigger=CronTrigger(day_of_week='fri', hour=10, minute=55, timezone='Europe/Paris')
 )
 async def weekly_polls():
-    ch = bot.get_channel(1353371080273952939)  # your channel ID
+    ch = bot.get_channel(137189859528815823)  # your channel ID
     # Time-slot poll
     await create_poll(
         ch,
         "When should we run this weekend’s Guild Boss runs?",
         ["Friday 22:00", "Saturday 18:00", "Saturday 22:00", "Sunday 18:00", "Sunday 21:00"],
-        timeout_s=12*3600
+        timeout_s=2*60
     )
     # Boss-choice poll
     await create_poll(
         ch,
         "Which boss are we targeting?",
         ["Daigon", "Pakilo Naru", "Leviathan", "Manticus"],
-        timeout_s=12*3600
+        timeout_s=2*60
     )
 
 # ───────────────────────────────────────────────────────────────────────────
