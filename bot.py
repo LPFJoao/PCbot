@@ -212,10 +212,10 @@ async def create_poll(channel, question: str, options: list[str], timeout_s: flo
 # Scheduled Weekly Polls: Thursdays at 16:00 Paris time
 # ───────────────────────────────────────────────────────────────────────────
 @scheduler.scheduled_job(
-    trigger=CronTrigger(day_of_week='fri', hour=10, minute=55, timezone='Europe/Paris')
+    trigger=CronTrigger(day_of_week='fri', hour=10, minute=58, timezone='Europe/Paris')
 )
 async def weekly_polls():
-    ch = bot.get_channel(137189859528815823)  # your channel ID
+    ch = bot.get_channel(1371898595288158231)  # your channel ID
     # Time-slot poll
     await create_poll(
         ch,
