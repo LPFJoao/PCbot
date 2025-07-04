@@ -183,7 +183,7 @@ class PollButton(Button):
         )
 
 class PollView(View):
-    def __init__(self, options: list[str], timeout: float = 12*3600):  # 12h default
+    def __init__(self, options: list[str], timeout: float = 20*3600):  # 12h default
         super().__init__(timeout=timeout)
         self.counts = {opt: 0 for opt in options}
         self.voters = {}
@@ -202,7 +202,7 @@ class PollView(View):
         # send a separate summary message
         await self.message.channel.send(f"@everyone\n{results}")
 
-async def create_poll(channel, question: str, options: list[str], timeout_s: float = 12*3600):
+async def create_poll(channel, question: str, options: list[str], timeout_s: float = 20*3600):
     header = f"@everyone\n📢 **{question}**\nClick a button to vote!"
     view = PollView(options, timeout=timeout_s)
     msg = await channel.send(header, view=view)
@@ -221,14 +221,14 @@ async def weekly_polls():
         ch,
         "When should we run this weekend’s Guild Boss runs?",
         ["Friday 22:00", "Saturday 18:00", "Saturday 22:00", "Sunday 18:00", "Sunday 21:00"],
-        timeout_s=12*3600
+        timeout_s=20*3600
     )
     # Boss-choice poll
     await create_poll(
         ch,
         "Which boss are we targeting?",
         ["Daigon", "Pakilo Naru", "Leviathan", "Manticus"],
-        timeout_s=12*3600
+        timeout_s=20*3600
     )
 
 # ───────────────────────────────────────────────────────────────────────────
