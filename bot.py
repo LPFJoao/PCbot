@@ -183,7 +183,7 @@ class PollButton(Button):
         )
 
 class PollView(View):
-    def __init__(self, options: list[str], timeout: float = 20*3600):  # 12h default
+    def __init__(self, options: list[str], timeout: float = 12*3600):  # 12h default
         super().__init__(timeout=timeout)
         self.counts = {opt: 0 for opt in options}
         self.voters = {}
@@ -221,14 +221,14 @@ async def weekly_polls():
         ch,
         "When should we run this weekend’s Guild Boss runs?",
         ["Friday 22:00", "Saturday 18:00", "Saturday 22:00", "Sunday 18:00", "Sunday 21:00"],
-        timeout_s=20*3600
+        timeout_s=12*3600
     )
     # Boss-choice poll
     await create_poll(
         ch,
         "Which boss are we targeting?",
         ["Daigon", "Pakilo Naru", "Leviathan", "Manticus"],
-        timeout_s=20*3600
+        timeout_s=12*3600
     )
 
 # ───────────────────────────────────────────────────────────────────────────
