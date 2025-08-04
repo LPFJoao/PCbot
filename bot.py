@@ -10,6 +10,20 @@ import unicodedata
 import asyncio
 import asyncpg  
 
+# ───────────────────────────────────────────────────────────────────────────
+# Custom assets
+# ───────────────────────────────────────────────────────────────────────────
+EMOJI_MAP = {
+    "Tank":   "<:myTankEmoji:1401856113623826524>",
+    "DPS":    "<:myDPSEmoji:1401856076449579049>",
+    "Healer": "<:myHealerEmoji:1401856048230432809>",
+}
+
+STYLE_MAP = {
+    "Tank":   discord.ButtonStyle.danger,   # red
+    "DPS":    discord.ButtonStyle.primary,  # blue
+    "Healer": discord.ButtonStyle.success,  # green
+}
 
 # ───────────────────────────────────────────────────────────────────────────
 # Load environment variables
@@ -268,8 +282,9 @@ class AttendanceView(discord.ui.View):
 
 class RoleButton(discord.ui.Button):
     def __init__(self, role_label: str, parent: AttendanceView):
-        label = {"Tank":"🛡️ Tank","DPS":"⚔️ DPS","Healer":"✚ Healer"}[role_label]
-        super().__init__(label=label, style=discord.ButtonStyle.primary)
+        emoji = EMOJI_MAP[role_label]
+        style = STYLE_MAP[role_label]
+        super().__init__(label=role_label, emoji=emoji, style=style)
         self.role_label = role_label
         self.parent_view = parent
 
@@ -321,7 +336,11 @@ async def attendance(interaction: discord.Interaction, title: str, date: str, ti
         embed = view.build_embed()
 
         # This line is critical; we'll check here if it silently fails
-        msg = await interaction.followup.send(embed=embed, view=view)
+        msg = await interaction.followup.send(
+             content="@everyone", 
+             embed=embed,
+             view=view
+ )
         view.message = msg
 
     except Exception as e:
