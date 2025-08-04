@@ -232,9 +232,10 @@ async def weekly_polls():
 # Attendance system
 # ───────────────────────────────────────────────────────────────────────────
 class AttendanceView(discord.ui.View):
-    def __init__(self, title: str, raid_time_unix: int):
+    def __init__(self, title: str, raid_time_unix: int, description: str = None):
         super().__init__(timeout=None)
         self.title = title
+        self.description = description
         self.raid_time_unix = raid_time_unix
         self.signups = {"Tank": [], "DPS": [], "Healer": []}
         self.message: discord.Message | None = None
@@ -244,8 +245,13 @@ class AttendanceView(discord.ui.View):
 
     def build_embed(self) -> discord.Embed:
         embed = discord.Embed(title=f"🗓️ {self.title}", color=discord.Color.blurple())
+        
+        # Add description if provided
+        if self.description:
+            embed.add_field(name="📝 Details", value=self.description, inline=False)
+
         embed.add_field(name="🕡 Raid Time", value=f"<t:{self.raid_time_unix}:F>", inline=False)
-        embed.add_field(name="⏳ Countdown",   value=f"<t:{self.raid_time_unix}:R>", inline=False)
+        embed.add_field(name="⏳ Countdown", value=f"<t:{self.raid_time_unix}:R>", inline=False)
 
         for role, members in self.signups.items():
             icon = {"Tank":"🛡️","DPS":"⚔️","Healer":"✚"}[role]
@@ -253,6 +259,7 @@ class AttendanceView(discord.ui.View):
             embed.add_field(name=f"{icon} {role}s ({len(members)})", value=names, inline=False)
 
         return embed
+
 
     async def update_message(self):
         if self.message:
@@ -280,7 +287,8 @@ class RoleButton(discord.ui.Button):
 
 @bot.tree.command(name="attendance", description="Create a raid attendance signup")
 @app_commands.describe(
-    title="Raid title (e.g., NORMAL CLEAR)",
+    title="Raid title (e.g., BOONSTONE)",
+    description="Additional details or notes for the raid",
     date="Date of the raid (YYYY-MM-DD)",
     time="Start time in 24h format (HH:MM)"
 )
@@ -308,7 +316,7 @@ async def attendance(interaction: discord.Interaction, title: str, date: str, ti
     await interaction.response.send_message("✅ Attendance created!", ephemeral=True)
 
     # 2️⃣ Send public embed + buttons
-    view = AttendanceView(title, unix_ts)
+    view = AttendanceView(title, unix_ts, description)
     embed = view.build_embed()
     msg = await interaction.followup.send(embed=embed, view=view)
     view.message = msg
