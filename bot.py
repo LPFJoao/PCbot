@@ -268,9 +268,13 @@ class AttendanceView(discord.ui.View):
         embed.add_field(name="⏳ Countdown", value=f"<t:{self.raid_time_unix}:R>", inline=False)
 
         for role, members in self.signups.items():
-            icon = {"Tank":"🛡️","DPS":"⚔️","Healer":"✚"}[role]
+            icon = EMOJI_MAP.get(role, "")
             names = "\n".join(members) if members else "—"
-            embed.add_field(name=f"{icon} {role}s ({len(members)})", value=names, inline=False)
+            embed.add_field(
+                name=f"{icon} {role}s ({len(members)})",
+                value=names,
+                inline=False
+            )
 
         return embed
 
