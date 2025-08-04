@@ -235,7 +235,7 @@ class AttendanceView(discord.ui.View):
     def __init__(self, title: str, raid_time_unix: int, description: str = None):
         super().__init__(timeout=None)
         self.title = title
-        self.description = description
+        self.details = details
         self.raid_time_unix = raid_time_unix
         self.signups = {"Tank": [], "DPS": [], "Healer": []}
         self.message: discord.Message | None = None
@@ -288,7 +288,7 @@ class RoleButton(discord.ui.Button):
 @bot.tree.command(name="attendance", description="Create a raid attendance signup")
 @app_commands.describe(
     title="Raid title (e.g., BOONSTONE)",
-    description="Additional details or notes for the raid",
+    details="Additional details or notes for the raid",
     date="Date of the raid (YYYY-MM-DD)",
     time="Start time in 24h format (HH:MM)"
 )
@@ -316,7 +316,7 @@ async def attendance(interaction: discord.Interaction, title: str, date: str, ti
     await interaction.response.send_message("✅ Attendance created!", ephemeral=True)
 
     # 2️⃣ Send public embed + buttons
-    view = AttendanceView(title, unix_ts, description)
+    view = AttendanceView(title, unix_ts, details)
     embed = view.build_embed()
     msg = await interaction.followup.send(embed=embed, view=view)
     view.message = msg
