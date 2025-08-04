@@ -292,36 +292,40 @@ class RoleButton(discord.ui.Button):
     date="Date of the raid (YYYY-MM-DD)",
     time="Start time in 24h format (HH:MM)"
 )
-async def attendance(interaction: discord.Interaction, title: str, date: str, time: str, details: str = None):
-    # Role check
-    if not discord.utils.get(interaction.user.roles, name="Staff"):
-        await interaction.response.send_message(
-            "❌ You need the **Staff** role to use this.", ephemeral=True
-        )
-        return
-
-    # Parse datetime
+async def attendance(interaction: discord.Interaction, title: str, date: str, time: str, details: str):
     try:
-        dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
-        dt = pytz.timezone("Europe/Paris").localize(dt)
-        unix_ts = int(dt.timestamp())
-    except ValueError:
-        await interaction.response.send_message(
-            "❌ Invalid format. Use YYYY-MM-DD for date and HH:MM (24h) for time.",
-            ephemeral=True
-        )
-        return
+        # Role check
+        if not discord.utils.get(interaction.user.roles, name="Staff"):
+            await interaction.response.send_message(
+                "❌ You need the **Staff** role to use this.", ephemeral=True
+            )
+            return
 
-    # 1️⃣ Ack the command
-    await interaction.response.send_message("✅ Attendance created!", ephemeral=True)
+        # Parse datetime
+        try:
+            dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
+            dt = pytz.timezone("Europe/Paris").localize(dt)
+            unix_ts = int(dt.timestamp())
+        except ValueError:
+            await interaction.response.send_message(
+                "❌ Invalid format. Use YYYY-MM-DD for date and HH:MM (24h) for time.",
+                ephemeral=True
+            )
+            return
 
-    # 2️⃣ Send public embed + buttons
-    view = AttendanceView(title, unix_ts, details)
-    embed = view.build_embed()
-    msg = await interaction.followup.send(embed=embed, view=view)
-    view.message = msg
+        # Ack the command
+        await interaction.response.send_message("✅ Attendance created!", ephemeral=True)
 
+        # Send public embed + buttons
+        view = AttendanceView(title, unix_ts, details)
+        embed = view.build_embed()
 
+        # This line is critical; we'll check here if it silently fails
+        msg = await interaction.followup.send(embed=embed, view=view)
+        view.message = msg
+
+    except Exception as e:
+        print(f"⚠️ Error in /attendance command: {e}")
 # ───────────────────────────────────────────────────────────────────────────
 # On ready: start DB, load state, scheduler, sync commands
 # ───────────────────────────────────────────────────────────────────────────
