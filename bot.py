@@ -292,7 +292,7 @@ class RoleButton(discord.ui.Button):
     date="Date of the raid (YYYY-MM-DD)",
     time="Start time in 24h format (HH:MM)"
 )
-async def attendance(interaction: discord.Interaction, title: str, date: str, time: str):
+async def attendance(interaction: discord.Interaction, title: str, date: str, time: str, details: str = None):
     # Role check
     if not discord.utils.get(interaction.user.roles, name="Staff"):
         await interaction.response.send_message(
