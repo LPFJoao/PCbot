@@ -310,7 +310,7 @@ async def attendance(interaction: discord.Interaction, title: str, date: str, ti
     # 2️⃣ Send public embed + buttons
     view = AttendanceView(title, unix_ts)
     embed = view.build_embed()
-    msg = await interaction.channel.send(embed=embed, view=view)
+    msg = await interaction.followup.send(embed=embed, view=view)
     view.message = msg
 
 
