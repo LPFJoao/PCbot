@@ -232,7 +232,7 @@ async def weekly_polls():
 # Attendance system
 # ───────────────────────────────────────────────────────────────────────────
 class AttendanceView(discord.ui.View):
-    def __init__(self, title: str, raid_time_unix: int, description: str = None):
+    def __init__(self, title: str, raid_time_unix: int, details: str):
         super().__init__(timeout=None)
         self.title = title
         self.details = details
@@ -247,8 +247,8 @@ class AttendanceView(discord.ui.View):
         embed = discord.Embed(title=f"🗓️ {self.title}", color=discord.Color.blurple())
         
         # Add description if provided
-        if self.description:
-            embed.add_field(name="📝 Details", value=self.description, inline=False)
+        if self.details:
+            embed.add_field(name="📝 Details", value=self.details, inline=False)
 
         embed.add_field(name="🕡 Raid Time", value=f"<t:{self.raid_time_unix}:F>", inline=False)
         embed.add_field(name="⏳ Countdown", value=f"<t:{self.raid_time_unix}:R>", inline=False)
