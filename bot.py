@@ -298,10 +298,12 @@ class RoleButton(discord.ui.Button):
         for lst in self.parent_view.signups.values():
             if user in lst:
                 lst.remove(user)
-        # Add to selected
         self.parent_view.signups[self.role_label].append(user)
-        await self.parent_view.update_message()
-        await interaction.response.defer()  # silent ack
+        
+        await interaction.response.edit_message(
+            embed=self.parent_view.build_embed(),
+            view=self.parent_view
+        )
 
 
 @bot.tree.command(name="attendance", description="Create a raid attendance signup")
