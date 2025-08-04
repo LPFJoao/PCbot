@@ -241,7 +241,7 @@ class AttendanceView(discord.ui.View):
         self.message: discord.Message | None = None
 
         for role in ["Tank", "DPS", "Healer"]:
-            self.add_item(RoleButton(role, self))
+            self.add_item(RoleButton(role, parent=self))
 
     def build_embed(self) -> discord.Embed:
         embed = discord.Embed(title=f"🗓️ {self.title}", color=discord.Color.blurple())
@@ -267,21 +267,21 @@ class AttendanceView(discord.ui.View):
 
 
 class RoleButton(discord.ui.Button):
-    def __init__(self, role_label: str, view: AttendanceView):
+    def __init__(self, role_label: str, parent: AttendanceView):
         label = {"Tank":"🛡️ Tank","DPS":"⚔️ DPS","Healer":"✚ Healer"}[role_label]
         super().__init__(label=label, style=discord.ButtonStyle.primary)
         self.role_label = role_label
-        self.view = view
+        self.parent_view = parent
 
     async def callback(self, interaction: discord.Interaction):
         user = interaction.user.display_name
         # Remove from previous role
-        for lst in self.view.signups.values():
+        for lst in self.parent_view.signups.values():
             if user in lst:
                 lst.remove(user)
         # Add to selected
-        self.view.signups[self.role_label].append(user)
-        await self.view.update_message()
+        self.parent_view.signups[self.role_label].append(user)
+        await self.parent_view.update_message()
         await interaction.response.defer()  # silent ack
 
 
